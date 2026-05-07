@@ -1,0 +1,334 @@
+{% extends "base.html" %}{% block title %}TrustLens — Result{% endblock %}
+{% block content %}
+{% set is_guest = result.is_guest %}
+
+<div class="result-page">
+  <div class="result-header">
+    <a href="/" class="back-link">← New Analysis</a>
+    <div class="result-platform-badge">{{ result.platform }}</div>
+  </div>
+
+  <!-- XAI Verdict Banner -->
+  {% if result.explanation %}
+  <div class="xai-banner {% if result.risk_label=='Low Risk' %}xai-low{% elif result.risk_label=='Moderate Risk' %}xai-mid{% else %}xai-high{% endif %}">
+    <div class="xai-verdict">{{ result.explanation.verdict }}</div>
+    <div class="xai-summary">{{ result.explanation.summary }}</div>
+  </div>
+  {% endif %}
+
+  <!-- Product Card -->
+  <div class="product-summary-card">
+    <h1 class="product-name">{{ result.product_name }}</h1>
+    <div class="product-meta-row">
+      {% if result.price %}<span class="price-tag">₹{{ "{:,.0f}".format(result.price) }}{% if result.mrp and result.mrp > result.price %} <span class="mrp-tag">₹{{ "{:,.0f}".format(result.mrp) }}</span>{% endif %}</span>{% endif %}
+      {% if result.discount_percent %}<span class="discount-tag">{{ result.discount_percent }}% off{% if result.discount_percent > 70 %} ⚠{% endif %}</span>{% endif %}
+      {% if result.avg_rating %}<span class="meta-item">⭐ {{ result.avg_rating }}/5</span>{% endif %}
+      {% if result.review_count %}<span class="meta-item">{{ "{:,}".format(result.review_count) }} reviews</span>{% endif %}
+    </div>
+    {% if result.seller_name %}<div class="seller-row">Seller: <strong>{{ result.seller_name }}</strong>{% if result.seller_rating %} <span class="seller-rating">{{ result.seller_rating }}★</span>{% endif %}</div>{% endif %}
+  </div>
+
+  <!-- Risk Score -->
+  <div class="risk-score-card" style="--rc:{{ result.risk_color }}">
+    <div class="risk-left">
+      <div class="risk-label-badge" style="background:{{ result.risk_color }}20;color:{{ result.risk_color }};border-color:{{ result.risk_color }}40">{{ result.risk_label }}</div>
+      <div class="risk-title">Fake Risk Probability</div>
+      <div class="risk-percent" style="color:{{ result.risk_color }}">{{ result.risk_percent }}<span class="risk-sym">%</span></div>
+      <div class="risk-method">{{ result.method }}</div>
+    </div>
+    <div class="risk-right">
+      <svg class="risk-gauge" viewBox="0 0 200 120">
+        <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="16" stroke-linecap="round"/>
+        <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="{{ result.risk_color }}" stroke-width="16" stroke-linecap="round"
+              stroke-dasharray="251.2" stroke-dashoffset="{{ 251.2 - (result.risk_percent/100*251.2) }}"/>
+        <text x="18" y="116" fill="rgba(255,255,255,0.3)" font-size="10" font-family="Space Mono">0</text>
+        <text x="93" y="30" fill="rgba(255,255,255,0.3)" font-size="10" font-family="Space Mono" text-anchor="middle">50</text>
+        <text x="175" y="116" fill="rgba(255,255,255,0.3)" font-size="10" font-family="Space Mono">100</text>
+      </svg>
+    </div>
+  </div>
+
+  {% if is_guest %}
+  <!-- Guest Lock Screen -->
+  <div class="guest-lock">
+    <div class="lock-icon">🔒</div>
+    <h2>Full Analysis Locked</h2>
+    <p>Sign up for free to access Risk Indicators, Sentiment Analysis, Price History, Bot Detection, and XAI Explanation.</p>
+    <div class="lock-actions">
+      <a href="/signup" class="action-btn primary">Sign Up Free</a>
+      <a href="/login" class="action-btn secondary">Log In</a>
+    </div>
+    <p class="lock-note">Already signed in? <a href="/login">Log in here</a></p>
+  </div>
+  {% else %}
+
+  <!-- Risk Indicators -->
+  <div class="indicators-section">
+    <p class="section-label">Risk Indicators</p>
+    <div class="indicators-grid">
+      {% for name,score in result.indicator_scores.items() %}
+      <div class="indicator-card">
+        <div class="indicator-name">{{ name }}</div>
+        <div class="indicator-bar-wrap"><div class="indicator-bar" style="width:{{ score }}%;background:{% if score>=70 %}#22c55e{% elif score>=40 %}#f59e0b{% else %}#ef4444{% endif %}"></div></div>
+        <div class="indicator-score" style="color:{% if score>=70 %}#22c55e{% elif score>=40 %}#f59e0b{% else %}#ef4444{% endif %}">{{ score }}%</div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- XAI Explanation -->
+  {% if result.explanation %}
+  <div class="xai-section">
+    <p class="section-label">AI Explanation</p>
+    <div class="xai-card">
+      <div class="xai-cols">
+        <div>
+          <div class="xai-col-title" style="color:#22c55e">✅ Positive Signals</div>
+          {% for p in result.explanation.positives %}
+          <div class="xai-item xai-pos">{{ p }}</div>
+          {% else %}<div class="xai-item xai-dim">No notable positives.</div>{% endfor %}
+        </div>
+        <div>
+          <div class="xai-col-title" style="color:#ef4444">⚠️ Risk Signals</div>
+          {% for n in result.explanation.negatives %}
+          <div class="xai-item xai-neg">{{ n }}</div>
+          {% else %}<div class="xai-item xai-dim">No notable risks.</div>{% endfor %}
+        </div>
+      </div>
+      <div class="xai-recommendation">
+        <strong>💡 Recommendation:</strong> {{ result.explanation.recommendation }}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Sentiment + Price Grid -->
+  <div class="analysis-grid">
+
+    <!-- Sentiment Analysis -->
+    <div class="analysis-card">
+      <h2 class="card-title">💬 Sentiment Analysis
+        <span class="card-badge">{{ result.review_count_analyzed }} reviews analyzed</span>
+      </h2>
+      <div class="sentiment-row">
+        <svg class="sentiment-donut" viewBox="0 0 120 120">
+          <circle cx="60" cy="60" r="45" fill="none" stroke="#1e293b" stroke-width="22"/>
+          <circle cx="60" cy="60" r="45" fill="none" stroke="#22c55e" stroke-width="22"
+                  stroke-dasharray="{{ (result.positive_ratio/100)*283 }} 283"
+                  stroke-dashoffset="70.75" transform="rotate(-90 60 60)"/>
+          <circle cx="60" cy="60" r="45" fill="none" stroke="#ef4444" stroke-width="22"
+                  stroke-dasharray="{{ (result.negative_ratio/100)*283 }} 283"
+                  stroke-dashoffset="{{ 70.75-(result.positive_ratio/100)*283 }}"
+                  transform="rotate(-90 60 60)"/>
+          <text x="60" y="56" text-anchor="middle" fill="white" font-size="13" font-family="Space Mono" font-weight="bold">{{ result.sentiment_score }}</text>
+          <text x="60" y="70" text-anchor="middle" fill="rgba(255,255,255,0.4)" font-size="8">compound</text>
+        </svg>
+        <div class="sentiment-legend">
+          <div class="legend-item"><span class="ldot" style="background:#22c55e"></span>Positive <strong>{{ result.positive_ratio }}%</strong></div>
+          <div class="legend-item"><span class="ldot" style="background:#64748b"></span>Neutral <strong>{{ result.neutral_ratio }}%</strong></div>
+          <div class="legend-item"><span class="ldot" style="background:#ef4444"></span>Negative <strong>{{ result.negative_ratio }}%</strong></div>
+        </div>
+      </div>
+      {% if result.suspicious_keyword_count > 0 %}
+      <div class="keyword-alert">⚠ {{ result.suspicious_keyword_count }} suspicious keyword(s) in reviews</div>
+      {% endif %}
+      {% if result.sentiment_details %}
+      <div class="review-list">
+        {% for r in result.sentiment_details[:4] %}
+        <div class="rev-chip rev-{{ r.label }}">
+          <span class="rev-label">{{ r.label }}</span>
+          <span class="rev-text">{{ r.text }}</span>
+          <span class="rev-score">{{ r.compound }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Price & Seller Analysis -->
+    <div class="analysis-card">
+      <h2 class="card-title">💰 Price & Seller Analysis</h2>
+      <div class="stat-row">
+        <div class="stat-item"><div class="stat-label">Selling Price</div><div class="stat-value">{% if result.price %}₹{{ "{:,.0f}".format(result.price) }}{% else %}N/A{% endif %}</div></div>
+        <div class="stat-item"><div class="stat-label">MRP</div><div class="stat-value">{% if result.mrp %}₹{{ "{:,.0f}".format(result.mrp) }}{% else %}N/A{% endif %}</div></div>
+        <div class="stat-item"><div class="stat-label">Discount</div>
+          <div class="stat-value {% if result.discount_percent>70 %}text-red{% elif result.discount_percent>40 %}text-amber{% endif %}">
+            {{ result.discount_percent }}%{% if result.discount_percent>70 %} ⚠{% endif %}
+          </div>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="stat-row">
+        <div class="stat-item"><div class="stat-label">Avg Rating</div><div class="stat-value">{{ result.avg_rating or 'N/A' }}/5</div></div>
+        <div class="stat-item"><div class="stat-label">Reviews</div><div class="stat-value">{{ "{:,}".format(result.review_count) }}</div></div>
+        <div class="stat-item"><div class="stat-label">Seller Rating</div>
+          <div class="stat-value {% if result.seller_rating and result.seller_rating<3.5 %}text-red{% endif %}">
+            {{ result.seller_rating or 'N/A' }}
+          </div>
+        </div>
+      </div>
+      <div class="divider"></div>
+      {% set f = result.features %}
+      <div class="mini-factors">
+        {% for label, val in [("Price Deviation Risk", f.price_deviation), ("Discount Risk", f.discount_risk), ("Seller Risk", f.seller_risk), ("Review Volume Risk", f.review_count_risk)] %}
+        <div class="mf-row">
+          <span>{{ label }}</span>
+          <div class="mf-bar-wrap"><div class="mf-bar" style="width:{{ (val*100)|int }}%;background:{% if val>0.6 %}#ef4444{% elif val>0.3 %}#f59e0b{% else %}#22c55e{% endif %}"></div></div>
+          <span class="mf-pct">{{ (val*100)|int }}%</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Price History Chart -->
+  {% if result.price_history and result.price_history.history %}
+  <div class="analysis-card" style="margin-bottom:1.25rem">
+    <h2 class="card-title">📈 Price History
+      <span class="card-badge">{{ result.price_history.source }}</span>
+    </h2>
+    {% set stats = result.price_history.stats %}
+    {% if stats %}
+    <div class="price-stats-row">
+      <div class="ps-item"><div class="ps-label">Lowest</div><div class="ps-value text-green">₹{{ "{:,.0f}".format(stats.min_price) }}</div></div>
+      <div class="ps-item"><div class="ps-label">Highest</div><div class="ps-value text-red">₹{{ "{:,.0f}".format(stats.max_price) }}</div></div>
+      <div class="ps-item"><div class="ps-label">Average</div><div class="ps-value">₹{{ "{:,.0f}".format(stats.avg_price) }}</div></div>
+      <div class="ps-item"><div class="ps-label">vs Avg</div>
+        <div class="ps-value {% if stats.current_vs_avg > 5 %}text-red{% elif stats.current_vs_avg < -5 %}text-green{% endif %}">
+          {{ stats.current_vs_avg }}%
+        </div>
+      </div>
+    </div>
+    {% endif %}
+    <div class="chart-wrap">
+      <canvas id="priceChart" height="220"></canvas>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Bot Detection -->
+  {% set bot = result.bot_detection %}
+  {% if bot %}
+  <div class="analysis-card" style="margin-bottom:1.25rem">
+    <h2 class="card-title">🤖 Review Bot / Spam Detection</h2>
+    <div class="bot-row">
+      <div class="bot-score-wrap">
+        <div class="bot-score" style="color:{% if bot.spam_score>0.5 %}#ef4444{% elif bot.spam_score>0.25 %}#f59e0b{% else %}#22c55e{% endif %}">
+          {{ (bot.spam_score*100)|int }}%
+        </div>
+        <div class="bot-label">Spam Score</div>
+        <div class="bot-verdict" style="color:{% if bot.spam_score>0.5 %}#ef4444{% elif bot.spam_score>0.25 %}#f59e0b{% else %}#22c55e{% endif %}">
+          {{ bot.label }}
+        </div>
+      </div>
+      <div class="bot-stats">
+        <div class="bs-row"><span>Total Reviews Analyzed</span><strong>{{ bot.total_reviews }}</strong></div>
+        <div class="bs-row"><span>Avg Words/Review</span><strong>{{ bot.avg_word_count }}</strong></div>
+        <div class="bs-row"><span>Duplicate Reviews</span><strong>{{ (bot.duplicate_ratio*100)|int }}%</strong></div>
+        <div class="bs-row"><span>Short Reviews</span><strong>{{ (bot.short_review_ratio*100)|int }}%</strong></div>
+        <div class="bs-row"><span>Bot-Pattern Reviews</span><strong>{{ bot.bot_phrase_count }}</strong></div>
+      </div>
+    </div>
+    {% if bot.flags %}
+    <div class="bot-flags">
+      {% for flag in bot.flags %}
+      <div class="bot-flag">⚑ {{ flag }}</div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <!-- Website Trust (for generic URLs) -->
+  {% if result.trust_signals and result.trust_signals.website_trust_score is defined %}
+  <div class="analysis-card" style="margin-bottom:1.25rem">
+    <h2 class="card-title">🌐 Website Trust Analysis</h2>
+    <div class="trust-row">
+      <div class="trust-score-wrap">
+        <div class="trust-score" style="color:{% if result.trust_signals.website_trust_score>=60 %}#22c55e{% elif result.trust_signals.website_trust_score>=40 %}#f59e0b{% else %}#ef4444{% endif %}">
+          {{ result.trust_signals.website_trust_score }}/100
+        </div>
+        <div class="trust-label">Website Trust Score</div>
+      </div>
+      <div class="trust-checks">
+        {% for key, label in [("has_https","HTTPS Secured"),("has_contact_page","Contact Page"),("has_privacy_policy","Privacy Policy"),("has_about_page","About Us"),("has_return_policy","Return Policy")] %}
+        <div class="trust-check {% if result.trust_signals[key] %}tc-pass{% else %}tc-fail{% endif %}">
+          {% if result.trust_signals[key] %}✓{% else %}✗{% endif %} {{ label }}
+        </div>
+        {% endfor %}
+        {% if result.trust_signals.fake_urgency %}<div class="trust-check tc-fail">✗ Fake Urgency Tactics Detected</div>{% endif %}
+        {% if result.trust_signals.too_good_to_be_true %}<div class="trust-check tc-fail">✗ Suspiciously High Discounts (90%+)</div>{% endif %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  {% endif %}{# end guest lock #}
+
+  <!-- URL bar -->
+  <div class="url-info-card">
+    <span class="url-lbl">URL</span>
+    <span class="url-val">{{ result.url[:80] }}{% if result.url|length>80 %}…{% endif %}</span>
+    <a href="{{ result.url }}" target="_blank" class="url-ext">↗</a>
+  </div>
+  <div class="result-actions">
+    <a href="/" class="action-btn primary">Analyze Another</a>
+    {% if current_user %}<a href="/history" class="action-btn secondary">History</a>{% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% if result.price_history and result.price_history.history and not result.is_guest %}
+<script>
+(function(){
+  const raw = {{ result.price_history.history | tojson }};
+  const labels = raw.map(d => d.date);
+  const prices = raw.map(d => d.price);
+  const ctx = document.getElementById('priceChart');
+  if(!ctx) return;
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'Price (₹)',
+        data: prices,
+        borderColor: '#f59e0b',
+        backgroundColor: 'rgba(245,158,11,0.08)',
+        borderWidth: 2.5,
+        pointBackgroundColor: '#f59e0b',
+        pointRadius: prices.length < 15 ? 5 : 3,
+        fill: true,
+        tension: 0.35,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => '₹' + ctx.raw.toLocaleString('en-IN')
+          }
+        }
+      },
+      scales: {
+        x: {
+          ticks: { color: '#64748b', maxTicksLimit: 8, maxRotation: 35 },
+          grid: { color: 'rgba(255,255,255,0.05)' }
+        },
+        y: {
+          ticks: {
+            color: '#64748b',
+            callback: v => '₹' + v.toLocaleString('en-IN')
+          },
+          grid: { color: 'rgba(255,255,255,0.05)' }
+        }
+      }
+    }
+  });
+})();
+</script>
+{% endif %}
+{% endblock %}

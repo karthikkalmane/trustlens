@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}My History — TrustLens{% endblock %}
+{% block content %}
+<div class="history-page">
+  <div class="page-header">
+    <h1 class="page-title">My Analysis History</h1>
+    <p class="page-sub">{{ records|length }} record(s) in your account</p>
+  </div>
+
+  {% if records %}
+  <div class="history-table-wrap">
+    <table class="history-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Product</th>
+          <th>Platform</th>
+          <th>Risk Score</th>
+          <th>Label</th>
+          <th>Sentiment</th>
+          <th>Spam Score</th>
+          <th>Date</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for rec in records %}
+        <tr>
+          <td class="mono">{{ rec.id }}</td>
+          <td class="product-cell">
+            <div class="product-cell-name">{{ rec.product_name[:55] }}{% if rec.product_name|length > 55 %}…{% endif %}</div>
+            <a href="{{ rec.url }}" target="_blank" class="product-cell-url">{{ rec.url[:55] }}…</a>
+          </td>
+          <td><span class="platform-chip">{{ rec.platform }}</span></td>
+          <td class="mono">
+            {% if rec.risk_score is not none %}
+              {% set pct = (rec.risk_score * 100)|round(1) %}
+              <div class="risk-mini-bar-wrap">
+                <div class="risk-mini-bar" style="width:{{ pct }}%;background:{% if pct<35 %}#22c55e{% elif pct<65 %}#f59e0b{% else %}#ef4444{% endif %}"></div>
+              </div>
+              <span style="color:{% if pct<35 %}#22c55e{% elif pct<65 %}#f59e0b{% else %}#ef4444{% endif %}">{{ pct }}%</span>
+            {% else %}—{% endif %}
+          </td>
+          <td>
+            {% if rec.risk_label %}
+            <span class="risk-badge risk-{% if rec.risk_label=='Low Risk' %}low{% elif rec.risk_label=='Moderate Risk' %}mid{% else %}high{% endif %}">{{ rec.risk_label }}</span>
+            {% endif %}
+          </td>
+          <td class="mono">
+            {% if rec.sentiment_score is not none %}
+            <span style="color:{% if rec.sentiment_score>0.05 %}#22c55e{% elif rec.sentiment_score<-0.05 %}#ef4444{% else %}#94a3b8{% endif %}">
+              {{ "%.3f"|format(rec.sentiment_score) }}
+            </span>
+            {% else %}—{% endif %}
+          </td>
+          <td class="mono">
+            {% if rec.spam_score is not none %}
+            <span style="color:{% if rec.spam_score>0.5 %}#ef4444{% elif rec.spam_score>0.25 %}#f59e0b{% else %}#22c55e{% endif %}">
+              {{ (rec.spam_score*100)|int }}%
+            </span>
+            {% else %}—{% endif %}
+          </td>
+          <td class="date-cell mono">{{ rec.timestamp[:16] }}</td>
+          <td>
+            <form action="/history/delete/{{ rec.id }}" method="POST" style="display:inline">
+              <button type="submit" class="del-btn" onclick="return confirm('Delete this record?')">✕</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <div class="empty-icon">📭</div>
+    <h2>No analyses yet</h2>
+    <p>Analyze a product URL to see it appear here.</p>
+    <a href="/" class="action-btn primary">Analyze a Product</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

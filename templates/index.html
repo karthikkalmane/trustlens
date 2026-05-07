@@ -1,0 +1,69 @@
+{% extends "base.html" %}{% block title %}TrustLens — AI Product Authenticity Analyzer{% endblock %}
+{% block content %}
+<div class="hero-section">
+  <div class="hero-tag">AI-Powered E-Commerce Intelligence</div>
+  <h1 class="hero-title">Is That Product <span class="hero-highlight">Real or Fake?</span></h1>
+  <p class="hero-sub">Paste any product URL from 13+ platforms. Our AI analyzes pricing, reviews, seller behavior, and bot patterns to generate a <strong>Fake Risk Probability Score</strong>.</p>
+
+  {% if error %}
+  <div class="alert alert-error"><span>⚠</span> {{ error }}
+    {% if show_login_prompt %}
+    <div style="margin-top:8px">
+      <a href="/login" class="inline-link">Log in</a> or
+      <a href="/signup" class="inline-link">Sign up free</a> for unlimited access.
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% if not current_user %}
+  <div class="guest-notice">
+    <span>👤 Guest Mode</span> — You can analyze <strong>1 product</strong> for free.
+    <a href="/signup">Sign up</a> for unlimited access + history.
+  </div>
+  {% endif %}
+
+  <form action="/analyze" method="POST" class="analyze-form" id="analyzeForm">
+    <div class="url-input-wrap">
+      <span class="input-icon">🔗</span>
+      <input type="url" name="url" id="urlInput" class="url-input"
+             placeholder="https://www.flipkart.com/... or any product URL"
+             value="{{ submitted_url or '' }}" required autocomplete="off"/>
+      <button type="submit" class="analyze-btn" id="analyzeBtn">
+        <span>Analyze</span><span>→</span>
+      </button>
+    </div>
+    <p class="input-hint" id="urlHint">Supports 13+ platforms including any product website</p>
+  </form>
+
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="loading-card">
+      <div class="loading-spinner"></div>
+      <p class="loading-title">Analyzing Product…</p>
+      <p class="loading-step" id="loadingStep">Fetching product data</p>
+      <div class="loading-bar-wrap"><div class="loading-bar"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- Platforms -->
+<section class="platforms-section">
+  <p class="section-label">Supported Platforms</p>
+  <div class="platforms-grid">
+    {% for p in ["Flipkart","Amazon","Meesho","Snapdeal","Myntra","Ajio","Tata CLiQ","Nykaa","FirstCry","Pepperfry","JioMart","IndiaMART","TradeIndia","Any Website"] %}
+    <div class="platform-pill {% if p == 'Any Website' %}platform-special{% endif %}">{{ p }}</div>
+    {% endfor %}
+  </div>
+</section>
+
+<!-- How it works -->
+<section class="how-section">
+  <h2 class="section-title">How TrustLens Works</h2>
+  <div class="steps-grid">
+    <div class="step-card"><div class="step-num">01</div><div class="step-icon">🔗</div><h3>URL Input</h3><p>Paste any product URL — we detect the platform automatically.</p></div>
+    <div class="step-card"><div class="step-num">02</div><div class="step-icon">🕸️</div><h3>Data Extraction</h3><p>Scrape price, seller, ratings, reviews using JSON-LD + platform-specific parsers.</p></div>
+    <div class="step-card"><div class="step-num">03</div><div class="step-icon">🤖</div><h3>Bot Detection</h3><p>Detect duplicate reviews, repeated phrases, and review burst patterns.</p></div>
+    <div class="step-card"><div class="step-num">04</div><div class="step-icon">📊</div><h3>Risk Score + XAI</h3><p>ML model + Explainable AI gives you a clear verdict with reasons.</p></div>
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,22 @@
+{% extends "base.html" %}{% block title %}Login — TrustLens{% endblock %}
+{% block content %}
+<div class="auth-page">
+  <div class="auth-card">
+    <div class="auth-logo"><span class="brand-icon">⬡</span> Trust<span class="brand-accent">Lens</span></div>
+    <h1 class="auth-title">Welcome back</h1>
+    <p class="auth-sub">Log in to access full analysis & history</p>
+    <form method="POST" class="auth-form">
+      <div class="field-group">
+        <label>Email</label>
+        <input type="email" name="email" placeholder="you@example.com" required autocomplete="email"/>
+      </div>
+      <div class="field-group">
+        <label>Password</label>
+        <input type="password" name="password" placeholder="••••••••" required/>
+      </div>
+      <button type="submit" class="auth-btn">Log In</button>
+    </form>
+    <p class="auth-switch">Don't have an account? <a href="/signup">Sign up</a></p>
+  </div>
+</div>
+{% endblock %}
