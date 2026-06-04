@@ -16,6 +16,7 @@ from modules.price_history import get_price_history
 
 app = Flask(__name__)
 app.config.from_object(Config)
+GUEST_COUNT_CACHE = {}
 
 with app.app_context():
     db.init_db()
@@ -66,9 +67,8 @@ def signup():
         elif len(password) < 6:
             flash("Password must be at least 6 characters.", "error")
         else:
-            ok, msg = db.create_user(username, email, password)
+            ok, msg, user = db.create_user(username, email, password)
             if ok:
-                user = db.get_user_by_email(email)
                 session["user_id"] = user["id"]
                 session["username"] = user["username"]
                 flash(f"Welcome, {username}! Your account has been created.", "success")
@@ -120,7 +120,10 @@ def analyze():
     guest_key = get_or_create_guest_key()
 
     if not user:
-        count = db.get_guest_count(guest_key)
+        count = GUEST_COUNT_CACHE.get(guest_key)
+        if count is None:
+            count = db.get_guest_count(guest_key)
+            GUEST_COUNT_CACHE[guest_key] = count
         if count >= 1:
             return render_template("index.html",
                 error="Guest users can only analyze 1 product. Please log in or sign up for unlimited access.",
@@ -200,6 +203,7 @@ def analyze():
             db.increment_user_count(user["id"])
         else:
             db.increment_guest_count(guest_key)
+            GUEST_COUNT_CACHE[guest_key] = GUEST_COUNT_CACHE.get(guest_key, 0) + 1
 
         # Logged-in users see full result; guests see limited
         result["is_guest"] = not bool(user)

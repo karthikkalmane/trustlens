@@ -27,6 +27,8 @@ def _load_model():
         except Exception: pass
     return None, None
 
+MODEL, SCALER = _load_model()
+
 def _rule_score(f):
     s = 0.0
     s += f.get("price_deviation",0)   * 0.12
@@ -42,7 +44,7 @@ def _rule_score(f):
     return min(1.0, max(0.0, s))
 
 def evaluate_risk(features, bot_score=0.0):
-    model, scaler = _load_model()
+    model, scaler = MODEL, SCALER
     if model and scaler:
         try:
             vec = np.array([[features.get(c,0) for c in FEATURES]])

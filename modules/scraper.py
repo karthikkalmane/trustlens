@@ -9,6 +9,7 @@ import re
 import json
 import time
 import requests
+from requests.adapters import HTTPAdapter
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse
 from config import Config
@@ -52,12 +53,16 @@ def validate_url(url):
 
 
 # ─── HTTP Fetch ────────────────────────────────────────────────────────
+HTTP_SESSION = requests.Session()
+HTTP_SESSION.headers.update(Config.HEADERS)
+_HTTP_ADAPTER = HTTPAdapter(pool_connections=10, pool_maxsize=20, max_retries=0)
+HTTP_SESSION.mount("http://", _HTTP_ADAPTER)
+HTTP_SESSION.mount("https://", _HTTP_ADAPTER)
+
 def fetch_page(url, retries=2):
     for attempt in range(retries + 1):
         try:
-            session = requests.Session()
-            session.headers.update(Config.HEADERS)
-            resp = session.get(url, timeout=Config.REQUEST_TIMEOUT, allow_redirects=True)
+            resp = HTTP_SESSION.get(url, timeout=Config.REQUEST_TIMEOUT, allow_redirects=True)
             resp.raise_for_status()
             return resp.text
         except requests.exceptions.Timeout:
@@ -113,15 +118,27 @@ PRICE_PATTERNS = [
     r'selling[_\s-]?price[\"\']\s*:\s*[\"\']?([\d,]+)',
     r'discounted[_\s-]?price[\"\']\s*:\s*[\"\']?([\d,]+)',
 ]
+COMBINED_PRICE_PATTERN = re.compile("|".join(f"(?:{p})" for p in PRICE_PATTERNS), re.IGNORECASE)
+TRUST_SIGNAL_SCAN_PATTERN = re.compile(
+    r"(?P<has_contact_page>contact\s*us|support|help)"
+    r"|(?P<has_privacy_policy>privacy\s*policy|terms\s*(of\s*)?service|refund\s*policy)"
+    r"|(?P<has_about_page>about\s*us|who\s*we\s*are)"
+    r"|(?P<has_return_policy>return|refund|exchange)"
+    r"|(?P<fake_urgency>limited\s*time|only\s*\d+\s*left|hurry|expires\s*in|deal\s*ends)"
+    r"|₹\s*(?P<price_value>[\d,]+)"
+    r"|(?P<discount_value>\d+)%\s*(?:off|discount)",
+    re.IGNORECASE
+)
 
 def extract_price_from_html(html):
-    for pattern in PRICE_PATTERNS:
-        matches = re.findall(pattern, html, re.IGNORECASE)
-        if matches:
-            try:
-                return float(matches[0].replace(",", ""))
-            except Exception:
-                continue
+    for match in COMBINED_PRICE_PATTERN.finditer(html):
+        value = next((grp for grp in match.groups() if grp), "")
+        if not value:
+            continue
+        try:
+            return float(value.replace(",", ""))
+        except Exception:
+            continue
     return 0
 
 def extract_rating_from_html(html):
@@ -193,13 +210,13 @@ REVIEW_SELECTORS = [
 
 def extract_reviews(soup):
     reviews = []
-    for sel in REVIEW_SELECTORS:
-        tags = soup.select(sel)
-        for tag in tags[:Config.MAX_REVIEWS]:
-            text = tag.get_text(separator=" ", strip=True)
-            if len(text) > 15 and text not in reviews:
-                reviews.append(text)
-        if len(reviews) >= 5:
+    seen_reviews = set()
+    for tag in soup.select(", ".join(REVIEW_SELECTORS)):
+        text = tag.get_text(separator=" ", strip=True)
+        if len(text) > 15 and text not in seen_reviews:
+            seen_reviews.add(text)
+            reviews.append(text)
+        if len(reviews) >= Config.MAX_REVIEWS:
             break
     return reviews[:Config.MAX_REVIEWS]
 
@@ -587,33 +604,47 @@ def scrape_generic(url, soup, html):
 
 def _detect_trust_signals(soup, html, url):
     """Heuristics to detect potentially fake / scam websites."""
+    del soup  # only raw HTML is used in this heuristic scanner
     signals = {
         "has_https": urlparse(url).scheme == "https",
-        "has_contact_page": bool(re.search(r'(?i)(contact\s*us|support|help)', html)),
-        "has_privacy_policy": bool(re.search(r'(?i)(privacy\s*policy|terms\s*(of\s*)?service|refund\s*policy)', html)),
-        "has_about_page": bool(re.search(r'(?i)(about\s*us|who\s*we\s*are)', html)),
-        "has_return_policy": bool(re.search(r'(?i)(return|refund|exchange)', html)),
+        "has_contact_page": False,
+        "has_privacy_policy": False,
+        "has_about_page": False,
+        "has_return_policy": False,
         "suspicious_price": False,
         "too_good_to_be_true": False,
-        "fake_urgency": bool(re.search(r'(?i)(limited\s*time|only\s*\d+\s*left|hurry|expires\s*in|deal\s*ends)', html)),
+        "fake_urgency": False,
     }
+    min_price = None
+    best_discount = 0
 
-    # Check for suspiciously low prices
-    prices = re.findall(r'₹\s*([\d,]+)', html)
-    prices_int = []
-    for p in prices:
-        try:
-            prices_int.append(int(p.replace(",", "")))
-        except Exception:
-            pass
-    if prices_int:
-        min_price = min(prices_int)
-        if min_price < 10:
-            signals["suspicious_price"] = True
+    for match in TRUST_SIGNAL_SCAN_PATTERN.finditer(html):
+        groups = match.groupdict()
+        for signal_name in (
+            "has_contact_page",
+            "has_privacy_policy",
+            "has_about_page",
+            "has_return_policy",
+            "fake_urgency",
+        ):
+            if groups.get(signal_name):
+                signals[signal_name] = True
 
-    # Too-good-to-be-true: 90%+ off signals
-    disc = re.findall(r'(\d+)%\s*(?:off|discount)', html, re.IGNORECASE)
-    if any(int(d) >= 90 for d in disc if d.isdigit()):
+        p = groups.get("price_value")
+        if p:
+            try:
+                price_int = int(p.replace(",", ""))
+                min_price = price_int if min_price is None else min(min_price, price_int)
+            except Exception:
+                pass
+
+        d = groups.get("discount_value")
+        if d and d.isdigit():
+            best_discount = max(best_discount, int(d))
+
+    if min_price is not None and min_price < 10:
+        signals["suspicious_price"] = True
+    if best_discount >= 90:
         signals["too_good_to_be_true"] = True
 
     # Trust score 0-100
