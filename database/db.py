@@ -83,18 +83,19 @@ def init_db():
 def create_user(username, email, password):
     conn = get_db()
     try:
-        conn.execute("""
+        c = conn.execute("""
             INSERT INTO users (username, email, password_hash, created_at)
             VALUES (?, ?, ?, ?)
         """, (username.strip(), email.strip().lower(),
               generate_password_hash(password),
               datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
         conn.commit()
-        return True, "Account created successfully!"
+        user = conn.execute("SELECT * FROM users WHERE id = ?", (c.lastrowid,)).fetchone()
+        return True, "Account created successfully!", (dict(user) if user else None)
     except sqlite3.IntegrityError as e:
         if "username" in str(e):
-            return False, "Username already taken."
-        return False, "Email already registered."
+            return False, "Username already taken.", None
+        return False, "Email already registered.", None
     finally:
         conn.close()
 
